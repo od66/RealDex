@@ -1,6 +1,6 @@
 name: realdex
 channels:
-  - https://mirrors.bfsu.edu.cn/anaconda/cloud/pytorch3d
+  - pytorch3d
   - pytorch
   - conda-forge
   - defaults

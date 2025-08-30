@@ -131,7 +131,31 @@ ehthumbs.db
 *.bak
 *.tmp
 
-# Anaconda
+# Conda/Anaconda
 .conda/
 *.conda
 *.ipynb_checkpoints/
+
+# Downloaded datasets
+data/
+dataset/
+datasets/
+*.zip
+*.tar.gz
+*.h5
+*.hdf5
+
+# Model checkpoints and training outputs
+checkpoints/
+*.pth
+*.pt
+*.ckpt
+experiments/
+wandb/
+
+# Cache directories
+.cache/
+__pycache__/
+
+# PyTorch specific
+lightning_logs/
