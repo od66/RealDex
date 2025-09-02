@@ -41,14 +41,14 @@ momentum_min: 0.01
 
 # training options
 weight_init: xavier
-total_epoch: 250
+total_epoch: 5000
 resume_epoch: -1
 
 # device
-cuda_id: 5
+cuda_id: 0
 
 # data loader
-num_workers: 4
+num_workers: 0
 batch_size: 8
 
 # hydra

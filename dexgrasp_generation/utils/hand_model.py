@@ -10,9 +10,27 @@ import torch
 from torch import nn
 import pytorch_kinematics as pk
 import trimesh
-import pytorch3d.structures
-import pytorch3d.ops
-import pytorch3d.transforms
+# Import PyTorch3D with compatibility fallbacks
+try:
+    import pytorch3d.structures
+    import pytorch3d.ops
+    import pytorch3d.transforms
+    print("✓ PyTorch3D imports successful in hand_model.py")
+except ImportError as e:
+    print(f"⚠ PyTorch3D import failed in hand_model.py: {e}")
+    print("⚠ Using compatibility fallbacks")
+    # Import our compatibility module
+    from . import pytorch3d_compat
+    import sys
+    # Replace the pytorch3d modules with our compatibility functions
+    sys.modules['pytorch3d.ops'] = pytorch3d_compat
+    
+# Ensure pytorch3d.ops is available even if import succeeded but ops failed
+import sys
+if not hasattr(sys.modules.get('pytorch3d', {}), 'ops'):
+    import pytorch3d
+    from . import pytorch3d_compat
+    pytorch3d.ops = pytorch3d_compat
 from csdf import index_vertices_by_faces, compute_sdf
 
 class AdditionalLoss(nn.Module):
@@ -70,7 +88,13 @@ def cal_loss(hand, cmap_labels, cmap_pred, object_pc, plane_parameters, num_obj_
     loss_pen = distances[distances > 0].sum() / batch_size
 
     # loss_dis
-    dis_pred = pytorch3d.ops.knn_points(object_pc, contact_candidates).dists[:, :, 0]  # squared chamfer distance from object_pc to contact_candidates_pred
+    # Use compatibility function for knn_points
+    try:
+        dis_pred = pytorch3d.ops.knn_points(object_pc, contact_candidates).dists[:, :, 0]
+    except AttributeError:
+        # Fallback implementation
+        from .pytorch3d_compat import knn_points
+        dis_pred = knn_points(object_pc, contact_candidates).dists[:, :, 0]
     small_dis_pred = dis_pred < thres_dis ** 2
     loss_dis = dis_pred[small_dis_pred].sqrt().sum()# / (small_dis_pred.sum() + 1e-4)
 
@@ -174,8 +198,15 @@ class HandModel:
                 self.mesh[link_name]['surface_points'] = torch.tensor([], dtype=torch.float, device=device).reshape(0, 3)
                 continue
             mesh = pytorch3d.structures.Meshes(self.mesh[link_name]['vertices'].unsqueeze(0), self.mesh[link_name]['faces'].unsqueeze(0))
-            dense_point_cloud = pytorch3d.ops.sample_points_from_meshes(mesh, num_samples=100 * num_samples[link_name])
-            surface_points = pytorch3d.ops.sample_farthest_points(dense_point_cloud, K=num_samples[link_name])[0][0]
+            # Use compatibility functions for mesh sampling
+            try:
+                dense_point_cloud = pytorch3d.ops.sample_points_from_meshes(mesh, num_samples=100 * num_samples[link_name])
+                surface_points = pytorch3d.ops.sample_farthest_points(dense_point_cloud, K=num_samples[link_name])[0][0]
+            except AttributeError:
+                # Fallback implementation
+                from .pytorch3d_compat import sample_points_from_meshes, sample_farthest_points
+                dense_point_cloud = sample_points_from_meshes(mesh, num_samples=100 * num_samples[link_name])
+                surface_points, _ = sample_farthest_points(dense_point_cloud, K=num_samples[link_name])
             surface_points.to(dtype=torch.float, device=device)
             self.mesh[link_name]['surface_points'] = surface_points
     

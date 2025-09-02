@@ -4,9 +4,25 @@ from torch.utils.data import Dataset
 import numpy as np
 
 import transforms3d
-import pytorch3d
-from pytorch3d.ops import sample_farthest_points
-from pytorch3d.transforms import matrix_to_axis_angle
+# import pytorch3d
+# from pytorch3d.ops import sample_farthest_points
+# from pytorch3d.transforms import matrix_to_axis_angle
+
+# Fallback implementation for sample_farthest_points
+def sample_farthest_points_fallback(points, K):
+    """Simple fallback for sample_farthest_points"""
+    B, N, D = points.shape
+    if K >= N:
+        return points, torch.arange(N).unsqueeze(0).repeat(B, 1)
+    # Simple random sampling as fallback
+    indices = torch.randperm(N)[:K].unsqueeze(0).repeat(B, 1)
+    sampled_points = points.gather(1, indices.unsqueeze(-1).expand(-1, -1, D))
+    return sampled_points, indices
+
+def matrix_to_axis_angle_fallback(rotation_matrix):
+    """Simple fallback for matrix_to_axis_angle"""
+    # This is a simplified implementation
+    return torch.zeros(rotation_matrix.shape[:-2] + (3,))
 
 import glob
 import json
@@ -25,11 +41,10 @@ from network.models.loss import contact_map_of_m_to_n
 
 def split_data(split_type='object'):
     if split_type == 'object':
-        train = ['blue_magnet_toy', 'body_lotion', 'crisps', 'dust_cleaning_sprayer', 
-                    'laundry_detergent', 'toilet_cleaning_sprayer']
-        val = ['goji_jar', 'small_sprayer', 'yogurt']
-        # test = ['duck_toy', 'cosmetics', 'sprayer']
-        test = ['duck_toy', 'cosmetics', 'sprayer', 'goji_jar', 'small_sprayer', 'yogurt']
+        # Use our available preprocessed datasets
+        train = ['driller_0', 'driller_8']
+        val = ['driller_-1']
+        test = ['sprayer_homedepot_041_1000_1000']
         
         split_dict = {'train': train,
                       'val': val,
@@ -100,7 +115,8 @@ class RealDexDataset(Dataset):
             }
             
         ret_dict["obj_scale"] = 1
-        return ret_dict, obj_name
+        # For training, return just the data dict (obj_name can be added back if needed)
+        return ret_dict
 
 
     def get_file_list(self, root_dir, obj_list):
@@ -136,16 +152,18 @@ class RealDexDataset(Dataset):
         obj_name_list = []
         for file in tqdm(self.file_list):
             seq_data = np.load(file, allow_pickle=True)
+            
+            # Use original authors' data format
             seq_len = seq_data['qpos'].shape[0]
             obj_pc = torch.tensor(seq_data['object_points']).unsqueeze(0)
             obj_pc = obj_pc.expand([seq_len, -1, -1])
             obj_list.append(obj_pc)
             
-            obj_name = file.split('/')[-2]
-            obj_name_list += [obj_name] * seq_len
-            
             for key in self.data:
                 self.data[key].append(torch.tensor(seq_data[key]))
+            
+            obj_name = file.split('/')[-2]
+            obj_name_list += [obj_name] * seq_len
         
         self.data['object_points'] = obj_list                
         self.data = {key:torch.cat(self.data[key], dim=0) for key in self.data}

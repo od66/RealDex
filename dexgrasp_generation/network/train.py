@@ -86,7 +86,21 @@ def main(cfg):
     with InterruptHandler() as h:
         train_loss = {}
         for epoch in range(start_epoch, cfg["total_epoch"]):
-            for _, data in enumerate(tqdm(train_loader)):
+            # Use manual iteration to avoid tqdm hang issues
+            train_iter = iter(train_loader)
+            batch_count = 0
+            max_batches = len(train_loader)
+            
+            while batch_count < max_batches:
+                try:
+                    data = next(train_iter)
+                    batch_count += 1
+                    if batch_count % 10 == 0:
+                        print(f"Epoch {epoch}, Batch {batch_count}/{max_batches}")
+                except StopIteration:
+                    break
+                
+                # Original training logic continues here
                 loss_dict = trainer.update(data)
                 loss_dict["cnt"] = 1
                 add_dict(train_loss, loss_dict)

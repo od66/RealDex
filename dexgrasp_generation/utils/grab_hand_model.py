@@ -9,11 +9,16 @@ import json
 import torch
 from torch import nn
 import pytorch_kinematics as pk
-import pytorch3d
-from pytorch3d.structures import Meshes
-from pytorch3d.ops import sample_points_from_meshes, sample_farthest_points
-import pytorch3d.ops
-import pytorch3d.transforms
+try:
+    import pytorch3d
+    from pytorch3d.structures import Meshes
+    from pytorch3d.ops import sample_points_from_meshes, sample_farthest_points
+    import pytorch3d.ops
+    import pytorch3d.transforms
+    PYTORCH3D_AVAILABLE = True
+except ImportError:
+    print("⚠️  PyTorch3D not available, using fallback implementations")
+    PYTORCH3D_AVAILABLE = False
 # from csdf import index_vertices_by_faces, compute_sdf
 import pickle
 from manotorch.manolayer import ManoLayer, MANOOutput

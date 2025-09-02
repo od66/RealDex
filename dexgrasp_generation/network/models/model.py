@@ -7,7 +7,55 @@ from abc import abstractmethod
 from copy import deepcopy
 from hydra import compose
 from omegaconf.omegaconf import open_dict
-from pytorch3d.loss import chamfer_distance as CD
+from omegaconf import OmegaConf
+# Import chamfer_distance with fallback to simple implementation
+try:
+    from pytorch3d.loss import chamfer_distance as CD
+    print("✓ Using PyTorch3D chamfer_distance")
+except ImportError as e:
+    print(f"⚠ PyTorch3D chamfer_distance failed ({e}), using simple implementation")
+    
+    def simple_chamfer_distance(x, y, point_reduction='sum', batch_reduction='mean'):
+        """
+        Simple chamfer distance implementation without PyTorch3D dependency.
+        Args:
+            x, y: point clouds of shape (B, N, 3) and (B, M, 3)
+            point_reduction: 'sum' or 'mean'
+            batch_reduction: 'sum' or 'mean'
+        Returns:
+            chamfer_distance, None (to match PyTorch3D API)
+        """
+        # x: (B, N, 3), y: (B, M, 3)
+        x_expanded = x.unsqueeze(2)  # (B, N, 1, 3)
+        y_expanded = y.unsqueeze(1)  # (B, 1, M, 3)
+        
+        # Compute squared distances
+        distances = torch.sum((x_expanded - y_expanded) ** 2, dim=3)  # (B, N, M)
+        
+        # Forward chamfer: for each point in x, find closest in y
+        min_dist_x_to_y = torch.min(distances, dim=2)[0]  # (B, N)
+        
+        # Backward chamfer: for each point in y, find closest in x
+        min_dist_y_to_x = torch.min(distances, dim=1)[0]  # (B, M)
+        
+        # Combine forward and backward
+        if point_reduction == 'sum':
+            forward_chamfer = torch.sum(min_dist_x_to_y, dim=1)  # (B,)
+            backward_chamfer = torch.sum(min_dist_y_to_x, dim=1)  # (B,)
+        else:  # mean
+            forward_chamfer = torch.mean(min_dist_x_to_y, dim=1)  # (B,)
+            backward_chamfer = torch.mean(min_dist_y_to_x, dim=1)  # (B,)
+        
+        chamfer_dist = forward_chamfer + backward_chamfer  # (B,)
+        
+        if batch_reduction == 'mean':
+            chamfer_dist = torch.mean(chamfer_dist)
+        elif batch_reduction == 'sum':
+            chamfer_dist = torch.sum(chamfer_dist)
+        
+        return chamfer_dist, None
+    
+    CD = simple_chamfer_distance
 
 
 base_path = os.path.dirname(__file__)
@@ -125,9 +173,25 @@ class ContactModel(BaseModel):
 class AffordanceModel(BaseModel):
     def __init__(self, cfg):
         super(AffordanceModel, self).__init__(cfg)
-        contact_cfg = compose(f"{cfg['model']['contact_net']['type']}_config")
-        with open_dict(contact_cfg):
-            contact_cfg['device'] = self.device
+        
+        # Create minimal config for contact network to avoid Hydra issues
+        contact_cfg = OmegaConf.create({
+            'exp_dir': cfg['model']['contact_net']['ckpt_path'],
+            'device': self.device,
+            'model': {
+                'obj_inchannel': 3,
+                'num_obj_points': cfg['dataset']['num_obj_points'],
+                'backbone_net': 'pointnet',
+                'network': {
+                    'out_channel': 10
+                }
+            },
+            'dataset': {
+                'num_obj_points': cfg['dataset']['num_obj_points'],
+                'num_hand_points': cfg['dataset']['num_hand_points']
+            }
+        })
+        
         self.contact_net = ContactMapNet(contact_cfg).to(self.device)
         self.net = AffordanceCVAE(cfg, self.contact_net).to(self.device)
         self.normalize_factor=cfg['model']['tta']['normalize_factor']

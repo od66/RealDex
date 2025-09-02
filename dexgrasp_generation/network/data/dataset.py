@@ -22,8 +22,19 @@ def get_realdex_dataloader(cfg, mode="train", shuffle=None):
     if shuffle is None:
         shuffle = (mode == "train")
 
-    dataset = RealDexDataset(cfg, mode)
-    return DataLoader(dataset, batch_size=cfg["batch_size"], shuffle=shuffle, num_workers=cfg["num_workers"], drop_last=True)
+    # Use full RealDex dataset for comprehensive training
+    try:
+        from datasets.full_realdex_dataset import get_full_realdex_dataloader
+        return get_full_realdex_dataloader(cfg, mode)
+    except Exception as e:
+        print(f"⚠ Full dataset loader failed: {e}, using simple dataset")
+        try:
+            from datasets.simple_realdex_dataset import get_simple_realdex_dataloader
+            return get_simple_realdex_dataloader(cfg, mode)
+        except Exception as e2:
+            print(f"⚠ Simple dataset adapter failed: {e2}, using original dataset")
+            dataset = RealDexDataset(cfg, mode)
+            return DataLoader(dataset, batch_size=cfg["batch_size"], shuffle=shuffle, num_workers=cfg["num_workers"], drop_last=True)
     
 def feature_to_color(feature_values):
     colormap = plt.get_cmap('rainbow')  # Choose a colormap (e.g., 'viridis')

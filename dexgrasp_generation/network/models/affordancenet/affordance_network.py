@@ -9,9 +9,25 @@ import numpy as np
 import torch.nn.functional as F
 from network.models.backbones.pointnet_encoder import PointNetEncoder
 from utils.hand_model import HandModel
-from pytorch3d.transforms import matrix_to_axis_angle
+# Import PyTorch3D transforms with fallback
+try:
+    from pytorch3d.transforms import matrix_to_axis_angle
+except ImportError:
+    # Use our compatibility implementation
+    import sys
+    import os
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'utils'))
+    from .pytorch3d_compat import matrix_to_axis_angle
 import os
-from pytorch3d.ops import sample_farthest_points
+# Import PyTorch3D ops with fallback
+try:
+    from pytorch3d.ops import sample_farthest_points
+except ImportError:
+    # Use our compatibility implementation
+    import sys
+    import os
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'utils'))
+    from .pytorch3d_compat import sample_farthest_points
 
 
 
@@ -154,11 +170,11 @@ class AffordanceCVAE(nn.Module):
         # self.num_obj_points = cfg['dataset']['num_obj_points']
         self.device = cfg['device']
         self.hand_model = HandModel(
-            mjcf_path='data/mjcf/shadow_hand.xml',
-            mesh_path='data/mjcf/meshes',
+            mjcf_path='assets/mjcf/shadow_hand.xml',
+            mesh_path='assets/mjcf/meshes',
             n_surface_points=self.num_hand_points,
-            contact_points_path='data/mjcf/contact_points.json',
-            penetration_points_path='data/mjcf/penetration_points.json',
+            contact_points_path='assets/mjcf/contact_points.json',
+            penetration_points_path='assets/mjcf/penetration_points.json',
             device=self.device,
         )
         self.cmap_func = contact_net.forward

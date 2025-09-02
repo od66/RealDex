@@ -1,7 +1,7 @@
 root_path: "./data"
-# Comment the line below to train on all categories. (i.e., do not specify the categories)
-# categories: ["bottle"]
-dataset_dir: "RealDex"
+# Use preprocessed data that's already available  
+categories: ["driller_0", "driller_8", "driller_-1", "sprayer_homedepot_041_1000_1000"]
+dataset_dir: "your_data_converted"
 
 data_info_path: "assets/RealDexData"
 
