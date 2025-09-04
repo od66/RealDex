@@ -1,0 +1,55 @@
+defaults:
+    - _self_
+    - model: cvae
+    - dataset: cvae_test_data
+    - override hydra/hydra_logging: none
+    - override hydra/job_logging: none
+
+network_type: affordance_cvae
+use_DFCData: True
+use_Shadow: True
+
+# dirs
+exp_dir: ./runs/cvae_test_1hr
+
+# wandb
+wandb_offline: True
+wandb_debug_mode: True  # and only program error will be reported
+
+# frequency (faster for testing)
+freq:
+    step_epoch: 10  # log every 10 epochs instead of 100
+    save: 100       # save every 100 iterations instead of 1000
+    plot: 50        # plot every 50 iterations instead of 100
+    test: 5000      # test every 5000 iterations instead of 50000
+
+# optimization options
+optimizer: Adam
+weight_decay: 0.0001
+learning_rate: 0.0005
+lr_policy: step
+lr_gamma: 0.5 # lr decay rate
+lr_step_size: 20  # reduced from 40 for faster testing
+lr_clip: 0.00001 # min lr
+
+# bn momentum adjustment
+momentum_original: 0.1
+momentum_decay: 0.5
+momentum_step_size: 10  # reduced from 20
+momentum_min: 0.01
+
+# training options
+weight_init: xavier
+total_epoch: 50  # reduced from 250 for 1-hour test
+resume_epoch: -1
+
+# device
+cuda_id: 0
+
+# data loader
+num_workers: 0
+batch_size: 32
+
+# hydra
+hydra:
+    output_subdir: null

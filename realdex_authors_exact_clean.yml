@@ -1,0 +1,73 @@
+name: realdex_authors_exact
+channels:
+  - defaults
+  - conda-forge
+  - pytorch
+dependencies:
+  - python=3.8.20
+  - pip
+  - pip:
+      # Core PyTorch with CUDA 11.7 support
+      - torch==1.13.0+cu117 --extra-index-url https://download.pytorch.org/whl/cu117
+      - torchvision==0.14.0+cu117 --extra-index-url https://download.pytorch.org/whl/cu117
+      - torchaudio==0.13.0+cu117 --extra-index-url https://download.pytorch.org/whl/cu117
+      
+      # PyTorch3D (exact authors' version)
+      - pytorch3d==0.3.0
+      
+      # PyTorch Geometric ecosystem
+      - torch-geometric==2.2.0
+      - torch-scatter==2.0.9 --extra-index-url https://data.pyg.org/whl/torch-1.13.0+cu117.html
+      - torch-sparse==0.6.13 --extra-index-url https://data.pyg.org/whl/torch-1.13.0+cu117.html
+      - torch-cluster==1.6.0+pt113cu117 --extra-index-url https://data.pyg.org/whl/torch-1.13.0+cu117.html
+      
+      # Core scientific packages
+      - numpy==1.24.4
+      - scipy==1.10.0
+      - matplotlib==3.5.1
+      - scikit-learn==1.3.0
+      
+      # Computer vision and ML
+      - opencv-python==4.8.0.76
+      - pytorch-lightning==2.0.8
+      - torchmetrics==1.5.2
+      - lightning-utilities==0.11.9
+      
+      # Configuration and utilities
+      - hydra-core==1.3.2
+      - omegaconf==2.3.0
+      - antlr4-python3-runtime==4.9.3
+      
+      # 3D processing
+      - transforms3d==0.4.1
+      - trimesh==3.9.8
+      - transformations==2022.9.26
+      
+      # Visualization and data
+      - plotly==5.14.1
+      - healpy==1.16.2
+      - astropy==5.2.2
+      - h5py==3.11.0
+      
+      # Development and utilities
+      - lxml==4.9.2
+      - ipython==8.12.3
+      - ipdb==0.13.13
+      - tqdm==4.67.1
+      - psutil==7.0.0
+      
+      # Additional core dependencies
+      - absl-py==2.3.1
+      - pyyaml==6.0.2
+      - pillow==10.4.0
+      - requests==2.32.4
+      - jinja2==3.1.6
+      - packaging==25.0
+      - typing-extensions==4.13.2
+      - fsspec==2025.3.0
+      - aiohttp==3.10.11
+      
+      # Meta packages for PyTorch3D compatibility
+      - fvcore==0.1.5.post20221221
+      - iopath==0.1.10
+      - yacs==0.1.8

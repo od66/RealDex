@@ -41,10 +41,10 @@ from network.models.loss import contact_map_of_m_to_n
 
 def split_data(split_type='object'):
     if split_type == 'object':
-        # Use our available preprocessed datasets
-        train = ['driller_0', 'driller_8']
-        val = ['driller_-1']
-        test = ['sprayer_homedepot_041_1000_1000']
+        # Use all available datasets for training due to small data size
+        train = ['driller_0', 'driller_8', 'driller_-1', 'sprayer_homedepot_041_1000_1000']
+        val = ['driller_0']  # Use driller_0 for validation
+        test = ['driller_8']  # Use driller_8 for test
         
         split_dict = {'train': train,
                       'val': val,
@@ -78,8 +78,12 @@ class RealDexDataset(Dataset):
         self.num_hand_points = dataset_cfg["num_hand_points"]
         # if originally self.categories is None, it means we want all categories
         self.categories = dataset_cfg.get("categories", None)
- 
-        self.object_name_list = split_data('object')[mode]
+
+        # Use categories from config instead of hardcoded split_data
+        if self.categories:
+            self.object_name_list = self.categories
+        else:
+            self.object_name_list = split_data('object')[mode]
         self.file_list = self.get_file_list(self.root_path,
                                             self.object_name_list)
         print(f"Total Sequence Num: {len(self.file_list)}.")
@@ -121,19 +125,36 @@ class RealDexDataset(Dataset):
 
     def get_file_list(self, root_dir, obj_list):
         """
-        :param root_dir: e.g. "./data/"
-                dataset_dir: "RealDex"
-        :return: root_dir + model_name + **.npz
+        :param root_dir: e.g. "../../data/"
+                dataset_dir: "your_data_converted" or "realdex_qpos_format"
+        :return: List of .npz files for each object category
         """
         file_list = []
+        dataset_dir = self.dataset_cfg["dataset_dir"]
+        
         for obj in obj_list:
-            file_dir_path = pjoin(root_dir, self.dataset_cfg["dataset_dir"], obj)
-            files = list(filter(lambda file: file[0] != "." and (file.endswith(".npz")),
-                                    os.listdir(file_dir_path)))
-            files = list(map(lambda file: pjoin(file_dir_path, file),
-                                files))
-            # print(obj, len(files))
-            file_list += files 
+            if dataset_dir == "realdex_qpos_format":
+                # Official RealDex format: multiple .npz files in object directories
+                obj_dir = pjoin(root_dir, dataset_dir, obj)
+                if os.path.exists(obj_dir):
+                    # Get all .npz files in the object directory
+                    npz_files = glob.glob(pjoin(obj_dir, "*.npz"))
+                    file_list.extend(sorted(npz_files))  # Sort for consistent ordering
+                    print(f"Found {len(npz_files)} files for {obj}")
+                else:
+                    print(f"Warning: {obj_dir} not found")
+            else:
+                # Original format: single .npz file per object (sequence_format or your_data_converted)
+                if dataset_dir == "sequence_format":
+                    file_path = pjoin(root_dir, dataset_dir, f"{obj}.npz")
+                else:
+                    # your_data_converted format
+                    file_path = pjoin(root_dir, dataset_dir, obj, "converted_data.npz")
+                
+                if os.path.exists(file_path):
+                    file_list.append(file_path)
+                else:
+                    print(f"Warning: {file_path} not found")
 
         return file_list
     
@@ -145,31 +166,91 @@ class RealDexDataset(Dataset):
             'hand_orient': [],
             'object_transl': [],
             'object_orient': []
-            # 'object_points': []
         }
         
         obj_list = []
         obj_name_list = []
+        dataset_dir = self.dataset_cfg["dataset_dir"]
+        
         for file in tqdm(self.file_list):
             seq_data = np.load(file, allow_pickle=True)
             
-            # Use original authors' data format
-            seq_len = seq_data['qpos'].shape[0]
-            obj_pc = torch.tensor(seq_data['object_points']).unsqueeze(0)
-            obj_pc = obj_pc.expand([seq_len, -1, -1])
-            obj_list.append(obj_pc)
-            
-            for key in self.data:
-                self.data[key].append(torch.tensor(seq_data[key]))
-            
-            obj_name = file.split('/')[-2]
-            obj_name_list += [obj_name] * seq_len
+            if dataset_dir == "realdex_qpos_format":
+                # Official RealDex format: each file has 1 sample
+                seq_len = seq_data['qpos'].shape[0]  # Should be 1
+                
+                # Convert qpos to hand_poses format if needed (22 -> 28 dimensions)
+                qpos = seq_data['qpos']  # Shape: (1, 22)
+                if qpos.shape[1] == 22:
+                    # Pad qpos from 22 to 28 dimensions to match expected format
+                    padding = np.zeros((qpos.shape[0], 6))
+                    qpos = np.concatenate([qpos, padding], axis=1)
+                
+                # Object points handling
+                obj_pc = torch.tensor(seq_data['object_points']).unsqueeze(0)  # Shape: (1, N, 3)
+                if obj_pc.shape[1] < 1024:  # Ensure we have enough points
+                    # Repeat points to reach 1024 if needed
+                    repeats = (1024 // obj_pc.shape[1]) + 1
+                    obj_pc = obj_pc.repeat(1, repeats, 1)[:, :1024, :]
+                obj_pc = obj_pc.expand([seq_len, -1, -1])
+                obj_list.append(obj_pc)
+                
+                # Store data with proper keys
+                self.data['qpos'].append(torch.tensor(qpos))
+                self.data['hand_transl'].append(torch.tensor(seq_data['hand_transl']))
+                self.data['hand_orient'].append(torch.tensor(seq_data['hand_orient']))
+                self.data['object_transl'].append(torch.tensor(seq_data['object_transl']))
+                self.data['object_orient'].append(torch.tensor(seq_data['object_orient']))
+                
+                # Extract object name from path
+                obj_name = file.split('/')[-2]  # Get directory name
+                obj_name_list += [obj_name] * seq_len
+                
+            else:
+                # Original format: converted_data.npz or sequence format
+                if 'hand_poses' in seq_data:
+                    # your_data_converted format
+                    seq_len = seq_data['hand_poses'].shape[0]
+                    
+                    # Convert hand_poses to qpos format
+                    hand_poses = seq_data['hand_poses']  # Shape: (N, 28)
+                    if hand_poses.shape[1] == 28:
+                        # Truncate from 28 to 22 dimensions
+                        qpos = hand_poses[:, :22]
+                    else:
+                        qpos = hand_poses
+                    
+                    # Create dummy data for missing keys (since test data doesn't have them)
+                    self.data['qpos'].append(torch.tensor(qpos))
+                    self.data['hand_transl'].append(torch.zeros(seq_len, 3))
+                    self.data['hand_orient'].append(torch.zeros(seq_len, 3))
+                    self.data['object_transl'].append(torch.zeros(seq_len, 3))
+                    self.data['object_orient'].append(torch.zeros(seq_len, 3, 3))
+                    
+                    # Object points
+                    obj_pc = torch.tensor(seq_data['obj_pc'])  # Shape: (N, 2048, 3)
+                    obj_list.append(obj_pc)
+                    
+                    obj_name = file.split('/')[-2]
+                    obj_name_list += [obj_name] * seq_len
+                    
+                else:
+                    # Sequence format (original)
+                    seq_len = seq_data['qpos'].shape[0]
+                    obj_pc = torch.tensor(seq_data['object_points']).unsqueeze(0)
+                    obj_pc = obj_pc.expand([seq_len, -1, -1])
+                    obj_list.append(obj_pc)
+                    
+                    for key in self.data:
+                        self.data[key].append(torch.tensor(seq_data[key]))
+                    
+                    obj_name = file.split('/')[-2]
+                    obj_name_list += [obj_name] * seq_len
         
         self.data['object_points'] = obj_list                
         self.data = {key:torch.cat(self.data[key], dim=0) for key in self.data}
         
         self.data['object_names'] = obj_name_list
-        
         
         print(f"Split {self.mode}: {self.data['qpos'].shape[0]} pieces of data.")         
 
